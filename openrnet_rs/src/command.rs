@@ -1,15 +1,15 @@
 use socketcan::{CanDataFrame, CanFrame, EmbeddedFrame, ExtendedId};
 // https://github.com/redragonx/open-rnet/blob/main/docs/RNET_PROTOCOL_GUIDE.md
 
-const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be configurable)
+pub(crate) const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be configurable)
 const DEFAULT_PM_SLOT: u8 = 0; // consistantly 0
 
-mod rnet_command_id {
+pub(crate) mod rnet_command_id {
     const JOYSTICK: u32 = 0x02000000;
 }
 
 // converts a raw rnet command id to an extendedid
-fn get_extended_id(raw_command_id: u32, device_slot: u8) -> Option<ExtendedId> {
+pub(crate) fn get_extended_id(raw_command_id: u32, device_slot: u8) -> Option<ExtendedId> {
     ExtendedId::new(raw_command_id | ((device_slot as u32) << 8))
 }
 
