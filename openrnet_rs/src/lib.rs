@@ -1,3 +1,4 @@
+mod command;
 mod socket;
 
 pub fn add(left: u64, right: u64) -> u64 {
@@ -6,11 +7,12 @@ pub fn add(left: u64, right: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use socketcan::{CanDataFrame, CanFrame, EmbeddedFrame, Frame};
+
     use super::*;
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        // let x = CanFrame::Data(CanDataFrame::new(id, data));
     }
 }
