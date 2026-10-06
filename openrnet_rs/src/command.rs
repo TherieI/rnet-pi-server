@@ -5,7 +5,7 @@ pub(crate) const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be config
 const DEFAULT_PM_SLOT: u8 = 0; // consistantly 0
 
 pub(crate) mod rnet_command_id {
-    const JOYSTICK: u32 = 0x02000000;
+    pub(crate) const JOYSTICK: u32 = 0x02000000;
 }
 
 // converts a raw rnet command id to an extendedid
