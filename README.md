@@ -8,8 +8,6 @@ mcp2515-can0.dtbo
 mcp2515-can1.dtbo
 mcp2515.dtbo
 
-When editing /boot/firmware/config.txt, dtoverlay will be one of these devices without the .dtbo
-
 # Edit /boot/firmware/config.txt, add:
 # NOTE: when editing /boot/firmware/config.txt, dtoverlay will be one of the devices grepped earlier without the .dtbo
 dtparam=spi=on
