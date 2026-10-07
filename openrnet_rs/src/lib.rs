@@ -12,15 +12,16 @@ mod tests {
     async fn move_wheelchair_forward() {
         let num_secs = 10;
 
-        let mut rsock = RnetSock::on_can0().unwrap();
+        let mut rsock = RnetSock::new("vcan0").unwrap();
         let forward = RnetCommand::Joystick { x: 0, y: 100 };
 
         let fut = async {
             loop {
                 // wait for the JSM's joystick input
-                let _ = rsock.wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_millis(9))).await;
-                // and spoof it
-                let _ = rsock.send(forward).await;
+                if rsock.wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_millis(9))).await.is_ok() {
+                    // and spoof it
+                    let _ = rsock.send(forward).await;
+                }
             }
         };
 
