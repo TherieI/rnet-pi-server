@@ -13,6 +13,7 @@ pub(crate) fn get_extended_id(raw_command_id: u32, device_slot: u8) -> Option<Ex
     ExtendedId::new(raw_command_id | ((device_slot as u32) << 8))
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum RnetCommand {
     Joystick { x: i8, y: i8 },
     SetSpeed(u8),

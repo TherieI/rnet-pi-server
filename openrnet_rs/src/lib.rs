@@ -6,15 +6,11 @@ pub mod error;
 mod tests {
     use std::time::Duration;
 
-    use socketcan::{CanDataFrame, CanFrame, EmbeddedFrame, Frame};
-
     use crate::{command::{RnetCommand, rnet_id}, socket::RnetSock};
-
-    use super::*;
 
     #[tokio::test]
     async fn move_wheelchair_forward() {
-        let num_secs = 3;
+        let num_secs = 10;
 
         let mut rsock = RnetSock::on_can0().unwrap();
         let forward = RnetCommand::Joystick { x: 0, y: 100 };
@@ -28,6 +24,6 @@ mod tests {
             }
         };
 
-        tokio::time::timeout(Duration::from_secs(num_secs), fut).await;
+        let _ = tokio::time::timeout(Duration::from_secs(num_secs), fut).await;
     }
 }

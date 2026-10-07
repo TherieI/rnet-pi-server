@@ -3,5 +3,10 @@ name = "rnet-pi-server"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [
+    "openrnet_rs",
+]
+
 [dependencies]
 openrnet = { path = "openrnet_rs"}
