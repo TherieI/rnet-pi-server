@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { version = "1.53.2", features = ["time"] }
+tokio = { version = "1.53.2", features = ["time", "rt-multi-thread", "macros"] }
 socketcan = { version = "4.0.0", features = ["tokio"]}
 futures-util = "0.3.34"
 thiserror = "2.0.21"

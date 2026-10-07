@@ -4,7 +4,7 @@ use socketcan::{CanDataFrame, CanFrame, EmbeddedFrame, ExtendedId};
 pub(crate) const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be configurable)
 const DEFAULT_PM_SLOT: u8 = 0; // consistantly 0
 
-pub(crate) mod rnet_command_id {
+pub(crate) mod rnet_id {
     pub(crate) const JOYSTICK: u32 = 0x02000000;
 }
 
@@ -22,7 +22,7 @@ impl From<RnetCommand> for CanFrame {
     fn from(value: RnetCommand) -> Self {
         match value {
             RnetCommand::Joystick { x, y } => {
-                let id = get_extended_id(rnet_command_id::JOYSTICK, DEFAULT_JSM_SLOT)
+                let id = get_extended_id(rnet_id::JOYSTICK, DEFAULT_JSM_SLOT)
                     .expect("Joystick Id should be in extended id range");
                 let data = [x.clamp(-100, 100) as u8, y.clamp(-100, 100) as u8];
                 CanFrame::Data(CanDataFrame::new(id, &data).expect("CanDataFrame should be valid"))
