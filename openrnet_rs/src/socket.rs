@@ -6,6 +6,9 @@ use crate::error::RnetSockErr;
 
 const DEFAULT_CAN_IFACE: &'static str = "can0";
 
+pub const WAIT_ACCEPT_ANY_DEVICE: u32 = 0xFFFF_F0FF;
+pub const WAIT_FIND_EXACT: u32 = 0xFFFF_FFFF;
+
 pub struct RnetSock {
     inner: CanSocket,
 }
@@ -28,6 +31,7 @@ impl RnetSock {
     pub async fn wait_for(
         &self,
         id: u32,
+        mask: u32,
         timeout: Option<Duration>,
     ) -> Result<[u8; 8], RnetSockErr> {
         let fut = async {
@@ -36,7 +40,8 @@ impl RnetSock {
                 if let CanFrame::Data(f) = frame {
                     // Extended frames have the 31st bit set to 1. Clearing this bit marks an extended frame id
                     // indistinguishable from a standard frame id which might cause issues in the future.
-                    if f.id_word() & !(1 << 31) == id {
+                    let cleared_bit = f.id_word() & !(1 << 31);
+                    if cleared_bit & mask == id & mask {
                         let mut data = [0u8; 8];
                         let slice = f.data();
                         data[..slice.len()].copy_from_slice(slice);
@@ -59,8 +64,7 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        command::{RnetCommand, rnet_id},
-        socket::RnetSock,
+        command::{RnetCommand, rnet_id}, socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
     };
 
     #[tokio::test]
@@ -68,7 +72,7 @@ mod tests {
         // run `cansend vcan0 02000100#0064` in terminal
         let rsock = RnetSock::new("vcan0").unwrap();
         let res = rsock
-            .wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_secs(10)))
+            .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_secs(10)))
             .await;
         println!("{:?}", res.unwrap());
     }
@@ -86,7 +90,7 @@ mod tests {
         let mut rsock = RnetSock::new("vcan0").unwrap();
 
         let directions = rsock
-            .wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_secs(10)))
+            .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_secs(10)))
             .await
             .expect("recved from CAN");
 

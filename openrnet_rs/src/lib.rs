@@ -7,8 +7,7 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        command::{RnetCommand, rnet_id},
-        socket::RnetSock,
+        command::{RnetCommand, rnet_id}, socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
     };
 
     #[tokio::test]
@@ -22,7 +21,7 @@ mod tests {
             loop {
                 // wait for the JSM's joystick input
                 if rsock
-                    .wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_millis(9)))
+                    .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_millis(9)))
                     .await
                     .is_ok()
                 {
