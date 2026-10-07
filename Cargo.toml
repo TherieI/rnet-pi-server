@@ -10,7 +10,7 @@ members = [
 
 [dependencies]
 openrnet = { path = "openrnet_rs"}
-bluer = "0.17.4"
+bluer = {version = "0.17.4", features = ["full"]}
 futures = "0.3"
 tokio = { version = "1", features = ["full"] }
 env_logger = "0.11"

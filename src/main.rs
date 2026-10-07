@@ -1,193 +1,77 @@
 extern crate openrnet;
 
-fn main() {
-    let rsock = openrnet::socket::RnetSock::new("vcan0").unwrap();
-    bluetooth();
-}
-
 use bluer::{
     adv::Advertisement,
     gatt::local::{
-        characteristic_control,
         Application,
         Characteristic,
-        CharacteristicControlEvent,
         CharacteristicWrite,
         CharacteristicWriteMethod,
         Service,
     },
 };
-use futures::StreamExt;
-use tokio::io::{AsyncBufReadExt, BufReader};
-
-use std::collections::BTreeSet;
-
-// Our custom BLE service UUID.
-const SERVICE_UUID: uuid::Uuid =
-    uuid::uuid!("12345678-1234-5678-1234-56789abcdef0");
-
-// The characteristic that receives messages.
-const MESSAGE_UUID: uuid::Uuid =
-    uuid::uuid!("12345678-1234-5678-1234-56789abcdef1");
+use std::time::Duration;
+use tokio::time::sleep;
 
 
-async fn bluetooth() -> bluer::Result<()> {
-    env_logger::init();
+fn main() {
+    //let _rsock = openrnet::socket::RnetSock::new("vcan0").unwrap();
+    test();
+}
 
-    // Connect to Linux's Bluetooth system.
+
+
+#[tokio::main]
+async fn test() -> Result<(), Box<dyn std::error::Error>>{
     let session = bluer::Session::new().await?;
-
-    // Get the default Bluetooth adapter.
     let adapter = session.default_adapter().await?;
-
     adapter.set_powered(true).await?;
+    println!("bluetooth adapter {} is ready.", adapter.name());
 
-    println!("Bluetooth adapter: {}", adapter.name());
-    println!("Bluetooth address: {}", adapter.address().await?);
-
-    // ------------------------------------------------------------
-    // Advertise the Pi
-    // ------------------------------------------------------------
-
-    let advertisement = Advertisement {
-        service_uuids: BTreeSet::from([SERVICE_UUID]),
+    let le_advertisement = Advertisement {
+        local_name: Some("TestPI,Reciever".to_string()),
         discoverable: Some(true),
-        local_name: Some("Pi-BLE".to_string()),
+        service_uuids: vec![].into_iter().collect(),
+        ..Default::default()
+    };
+    let _adv_handle = adapter.advertise(le_advertisement).await?;
+    println!("advertising started...");
+
+    let custom_characteristic = Characteristic {
+        uuid: "87654321-4321-8765-4321-876543210987".parse()?,
+        write: Some(CharacteristicWrite {
+            write: true,
+            write_without_response: true,
+            method: CharacteristicWriteMethod::Fun(Box::new(move |value, _| {
+                Box::pin(async move{
+                    if let Ok(recieved_str) = String::from_utf8(value.clone()) {
+                        println!("Recieved String: {}", recieved_str);
+                    } else{
+                        println!("Received Raw Bytes: {:?}", value);
+                    }
+                    Ok(())
+                })
+            })),
+            ..Default::default()
+        }),
         ..Default::default()
     };
 
-    let advertisement_handle = adapter.advertise(advertisement).await?;
-
-    println!("Advertising as Pi-BLE");
-
-    // ------------------------------------------------------------
-    // Create our GATT characteristic
-    // ------------------------------------------------------------
-
-    let (characteristic_control, characteristic_handle) =
-        characteristic_control();
-
-    let app = Application {
-        services: vec![
-            Service {
-                uuid: SERVICE_UUID,
-                primary: true,
-
-                characteristics: vec![
-                    Characteristic {
-                        uuid: MESSAGE_UUID,
-
-                        // Allow the iPhone to write messages.
-                        write: Some(CharacteristicWrite {
-                            write: true,
-                            write_without_response: true,
-
-                            // We'll receive writes through the control
-                            // event stream below.
-                            method: CharacteristicWriteMethod::Io,
-
-                            ..Default::default()
-                        }),
-
-                        control_handle: characteristic_handle,
-
-                        ..Default::default()
-                    }
-                ],
-
-                ..Default::default()
-            }
-        ],
-
+    let custom_service = Service {
+        uuid: "12345678-1234-5678-1234-567812345678".parse()?,
+        primary: true,
+        characteristics: vec![custom_characteristic],
         ..Default::default()
     };
 
-    // Register the GATT application with BlueZ.
-    let _app_handle =
-        adapter.serve_gatt_application(app).await?;
+    let mut app = Application::default();
+    app.services.push(custom_service);
 
-    println!("GATT server started.");
-    println!("Waiting for iPhone...");
-    println!();
-    println!("Service UUID:");
-    println!("{}", SERVICE_UUID);
-    println!();
-    println!("Message characteristic:");
-    println!("{}", MESSAGE_UUID);
-    println!();
+    let _app_handle = adapter.serve_gatt_application(app).await?;
+    println!("Gatt Server is active and listening for data.");
 
-    // ------------------------------------------------------------
-    // Wait for messages
-    // ------------------------------------------------------------
-
-    tokio::pin!(characteristic_control);
-
-    loop {
-        match characteristic_control.next().await {
-            Some(CharacteristicControlEvent::Write(request)) => {
-                println!("iPhone connected!");
-
-                // Accept the write request.
-                let mut reader = request.accept()?;
-
-                let mut buffer = vec![0u8; request.mtu()];
-
-                // Read the incoming data.
-                loop {
-                    match tokio::io::AsyncReadExt::read(
-                        &mut reader,
-                        &mut buffer,
-                    )
-                    .await
-                    {
-                        Ok(0) => {
-                            println!("iPhone disconnected.");
-                            break;
-                        }
-
-                        Ok(length) => {
-                            let data = &buffer[..length];
-
-                            match std::str::from_utf8(data) {
-                                Ok(message) => {
-                                    println!(
-                                        "Received: {}",
-                                        message
-                                    );
-                                }
-
-                                Err(_) => {
-                                    println!(
-                                        "Received binary data: {:02X?}",
-                                        data
-                                    );
-                                }
-                            }
-                        }
-
-                        Err(error) => {
-                            eprintln!(
-                                "Bluetooth read error: {}",
-                                error
-                            );
-                            break;
-                        }
-                    }
-                }
-            }
-
-            Some(_) => {
-                // Ignore other events.
-            }
-
-            None => {
-                println!("Bluetooth characteristic closed.");
-                break;
-            }
-        }
+    loop{
+        sleep(Duration::from_secs(3600)).await;
     }
 
-    drop(advertisement_handle);
-
-    Ok(())
 }
