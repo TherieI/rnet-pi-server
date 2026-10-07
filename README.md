@@ -1,9 +1,19 @@
 # Setup
 
 ```sh
+# Find CAN device:
+ls /boot/firmware/overlays/ | grep -i mcp2515
+Example output:
+mcp2515-can0.dtbo
+mcp2515-can1.dtbo
+mcp2515.dtbo
+
+When editing /boot/firmware/config.txt, dtoverlay will be one of these devices without the .dtbo
+
 # Edit /boot/firmware/config.txt, add:
+# NOTE: when editing /boot/firmware/config.txt, dtoverlay will be one of the devices grepped earlier without the .dtbo
 dtparam=spi=on
-dtoverlay=mcp2515-can0-overlay,oscillator=16000000,interrupt=25
+dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25
 dtoverlay=spi-bcm2835-overlay
 
 # Reboot
