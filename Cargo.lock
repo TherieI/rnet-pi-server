@@ -326,7 +326,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "openrnet_rs"
+name = "openrnet"
 version = "0.1.0"
 dependencies = [
  "futures-util",
@@ -394,6 +394,9 @@ dependencies = [
 [[package]]
 name = "rnet-pi-server"
 version = "0.1.0"
+dependencies = [
+ "openrnet",
+]
 
 [[package]]
 name = "scopeguard"

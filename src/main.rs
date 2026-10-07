@@ -1,3 +1,5 @@
+extern crate openrnet;
+
 fn main() {
-    println!("Hello, world!");
+    let rsock = openrnet::socket::RnetSock::new("vcan0").unwrap();
 }

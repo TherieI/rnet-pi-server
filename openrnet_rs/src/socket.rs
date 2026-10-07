@@ -18,7 +18,7 @@ impl RnetSock {
         })
     }
 
-    pub fn default() -> Result<Self, RnetSockErr> {
+    pub fn on_can0() -> Result<Self, RnetSockErr> {
         RnetSock::new(DEFAULT_CAN_IFACE)
     }
 
