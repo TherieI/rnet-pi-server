@@ -17,6 +17,8 @@ impl Chair {
 
     async fn move_toward(&mut self, dir: (i8, i8), millis: u64) -> Result<(), ChairError> {
         let limit = Instant::now() + Duration::from_millis(millis);
+        
+        self.sock.flush().await?;
         while Instant::now() < limit {
             // wait for the JSM's joystick input
             if let Ok(data) = self

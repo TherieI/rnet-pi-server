@@ -62,7 +62,14 @@ impl RnetSock {
             None => fut.await,
         }
     }
+
+    pub async fn flush(&mut self) -> Result<(), RnetSockErr> {
+        self.inner.flush().await?;
+        Ok(())
+    }
 }
+
+
 
 #[cfg(test)]
 mod tests {
