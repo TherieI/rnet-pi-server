@@ -50,4 +50,11 @@ impl Chair {
     pub async fn set_speed(&mut self, speed: u8) -> Result<(), ChairError> {
         Ok(self.sock.send(RnetCommand::SetSpeed(speed)).await?)
     }
+
+    pub async fn honk(&mut self, millis: u64) -> Result<(), ChairError> {
+        self.sock.send(RnetCommand::HornStart).await?;
+        tokio::time::sleep(Duration::from_millis(millis)).await;
+        self.sock.send(RnetCommand::HornStop).await?;
+        Ok(())
+    }
 }

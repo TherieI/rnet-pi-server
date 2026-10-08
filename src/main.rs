@@ -9,8 +9,10 @@ async fn main() {
     let mut chair = Chair::new(rsock);
     let _ = chair.set_speed(20);
     let _ = chair.forward(1000).await;
+    let _ = chair.honk(500).await;
     let _ = chair.set_speed(50);
     let _ = chair.forward(1000).await;
+    let _ = chair.honk(500).await;
     let _ = chair.set_speed(100);
     let _ = chair.forward(1000).await;
 }
