@@ -28,7 +28,7 @@ impl RnetSock {
 
     pub async fn send<F: Into<CanFrame>>(&mut self, frame: F) -> Result<(), RnetSockErr> {
         let mut frame = frame.into();
-        let id = frame.id_word();
+        let id = frame.id_word() & !(1 << 31);
         frame.set_id(get_extended_id(id, self.jsm_id).unwrap());
         Ok(self.inner.send(frame.into()).await?)
     }
