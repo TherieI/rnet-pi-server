@@ -8,6 +8,7 @@ const DEFAULT_CAN_IFACE: &'static str = "can0";
 
 pub const WAIT_ACCEPT_ANY_DEVICE: u32 = 0xFFFF_F0FF;
 pub const WAIT_MATCH_ID_EXACT: u32 = 0xFFFF_FFFF;
+pub const WAIT_MATCH_ANY: u32 = 0x0;
 
 pub struct RnetSock {
     inner: CanSocket,
@@ -65,6 +66,13 @@ impl RnetSock {
 
     pub async fn flush(&mut self) -> Result<(), RnetSockErr> {
         self.inner.flush().await?;
+        Ok(())
+    }
+
+    pub async fn drain(&self) -> Result<(), RnetSockErr> {
+        while let Ok(_) = self.wait_for(0, WAIT_MATCH_ANY, Some(Duration::from_millis(0))).await {
+            // discard — we only want frames from now on
+        }
         Ok(())
     }
 }
