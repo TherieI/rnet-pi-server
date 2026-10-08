@@ -1,5 +1,6 @@
 use openrnet::{
     command::{RnetCommand, rnet_id},
+    error::RnetSockErr,
     socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
 };
 use tokio::time::{Duration, Instant};
@@ -17,11 +18,11 @@ impl Chair {
 
     async fn move_toward(&mut self, dir: (i8, i8), millis: u64) -> Result<(), ChairError> {
         let limit = Instant::now() + Duration::from_millis(millis);
-        
+
         self.sock.flush().await?;
         while Instant::now() < limit {
             // wait for the JSM's joystick input
-            if let Ok(data) = self
+            match self
                 .sock
                 .wait_for(
                     rnet_id::JOYSTICK,
@@ -30,15 +31,19 @@ impl Chair {
                 )
                 .await
             {
-                if data[0] != 0 || data[1] != 0 {
-                    // the user is attempting to gain control of the joystick, halt operations
-                    return Err(ChairError::UserInterrupt);
+                Ok(data) => {
+                    if data[0] != 0 || data[1] != 0 {
+                        // the user is attempting to gain control of the joystick, halt operations
+                        return Err(ChairError::UserInterrupt);
+                    }
+                    // spoof CAN frame
+                    self.sock
+                        .send(RnetCommand::Joystick { x: dir.0, y: dir.1 })
+                        .await?;
                 }
-                // and spoof it
-                self
-                    .sock
-                    .send(RnetCommand::Joystick { x: dir.0, y: dir.1 })
-                    .await?;
+                Err(RnetSockErr::TimedOut) => { /* timing out is perfectly fine, continue the loop */
+                }
+                Err(e) => return Err(e.into()),
             }
         }
 

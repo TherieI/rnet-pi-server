@@ -69,8 +69,6 @@ impl RnetSock {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
