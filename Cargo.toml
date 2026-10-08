@@ -9,4 +9,4 @@ members = [
 ]
 
 [dependencies]
-openrnet = { path = "openrnet_rs"}
+openrnet = { path = "openrnet_rs" }

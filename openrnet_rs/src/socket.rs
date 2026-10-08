@@ -1,11 +1,13 @@
+use futures_util::sink::SinkExt;
 use socketcan::{CanFrame, EmbeddedFrame, Frame, tokio::CanSocket};
 use tokio::time::Duration;
-use futures_util::sink::SinkExt;
 
 use crate::error::RnetSockErr;
 
-
 const DEFAULT_CAN_IFACE: &'static str = "can0";
+
+pub const WAIT_ACCEPT_ANY_DEVICE: u32 = 0xFFFF_F0FF;
+pub const WAIT_MATCH_ID_EXACT: u32 = 0xFFFF_FFFF;
 
 pub struct RnetSock {
     inner: CanSocket,
@@ -22,18 +24,24 @@ impl RnetSock {
         RnetSock::new(DEFAULT_CAN_IFACE)
     }
 
-    pub async fn send<F: Into<CanFrame>>(&mut self, frame: F) -> Result<(), RnetSockErr>{
+    pub async fn send<F: Into<CanFrame>>(&mut self, frame: F) -> Result<(), RnetSockErr> {
         Ok(self.inner.send(frame.into()).await?)
     }
 
-    pub async fn wait_for(&self, id: u32, timeout: Option<Duration>) -> Result<[u8; 8], RnetSockErr> {
+    pub async fn wait_for(
+        &self,
+        id: u32,
+        mask: u32,
+        timeout: Option<Duration>,
+    ) -> Result<[u8; 8], RnetSockErr> {
         let fut = async {
             loop {
                 let frame = self.inner.read_frame().await?;
                 if let CanFrame::Data(f) = frame {
                     // Extended frames have the 31st bit set to 1. Clearing this bit marks an extended frame id
                     // indistinguishable from a standard frame id which might cause issues in the future.
-                    if f.id_word() & !(1 << 31) == id {
+                    let cleared_bit = f.id_word() & !(1 << 31);
+                    if cleared_bit & mask == id & mask {
                         let mut data = [0u8; 8];
                         let slice = f.data();
                         data[..slice.len()].copy_from_slice(slice);
@@ -43,7 +51,9 @@ impl RnetSock {
             }
         };
         match timeout {
-            Some(d) => tokio::time::timeout(d, fut).await.map_err(|_| RnetSockErr::TimedOut)?,
+            Some(d) => tokio::time::timeout(d, fut)
+                .await
+                .map_err(|_| RnetSockErr::TimedOut)?,
             None => fut.await,
         }
     }
@@ -53,13 +63,17 @@ impl RnetSock {
 mod tests {
     use std::time::Duration;
 
-use crate::{command::{RnetCommand, rnet_id}, socket::RnetSock};
+    use crate::{
+        command::{RnetCommand, rnet_id}, socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
+    };
 
     #[tokio::test]
     async fn test_wait_for_can() {
         // run `cansend vcan0 02000100#0064` in terminal
         let rsock = RnetSock::new("vcan0").unwrap();
-        let res = rsock.wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_secs(10))).await;
+        let res = rsock
+            .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_secs(10)))
+            .await;
         println!("{:?}", res.unwrap());
     }
 
@@ -75,8 +89,19 @@ use crate::{command::{RnetCommand, rnet_id}, socket::RnetSock};
         // run `cansend vcan0 02000100#0064` in terminal
         let mut rsock = RnetSock::new("vcan0").unwrap();
 
-        let directions = rsock.wait_for(rnet_id::JOYSTICK | 0x100, Some(Duration::from_secs(10))).await.expect("recved from CAN");
+        let directions = rsock
+            .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_secs(10)))
+            .await
+            .expect("recved from CAN");
 
-        assert!(rsock.send(RnetCommand::Joystick { x: directions[0] as i8 - 10, y: directions[1] as i8 - 10 }).await.is_ok())
+        assert!(
+            rsock
+                .send(RnetCommand::Joystick {
+                    x: directions[0] as i8 - 10,
+                    y: directions[1] as i8 - 10
+                })
+                .await
+                .is_ok()
+        )
     }
 }
