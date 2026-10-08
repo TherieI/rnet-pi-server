@@ -33,10 +33,10 @@ impl Chair {
                     return Err(ChairError::UserInterrupt);
                 }
                 // and spoof it
-                let _ = self
+                self
                     .sock
                     .send(RnetCommand::Joystick { x: dir.0, y: dir.1 })
-                    .await;
+                    .await?;
             }
         }
 
@@ -45,5 +45,9 @@ impl Chair {
 
     pub async fn forward(&mut self, millis: u64) -> Result<(), ChairError> {
         self.move_toward((0, 100), millis).await
+    }
+
+    pub async fn set_speed(&mut self, speed: u8) -> Result<(), ChairError> {
+        Ok(self.sock.send(RnetCommand::SetSpeed(speed)).await?)
     }
 }
