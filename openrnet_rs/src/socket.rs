@@ -7,7 +7,7 @@ use crate::error::RnetSockErr;
 const DEFAULT_CAN_IFACE: &'static str = "can0";
 
 pub const WAIT_ACCEPT_ANY_DEVICE: u32 = 0xFFFF_F0FF;
-pub const WAIT_FIND_EXACT: u32 = 0xFFFF_FFFF;
+pub const WAIT_MATCH_ID_EXACT: u32 = 0xFFFF_FFFF;
 
 pub struct RnetSock {
     inner: CanSocket,
