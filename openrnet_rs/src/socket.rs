@@ -2,7 +2,7 @@ use futures_util::sink::SinkExt;
 use socketcan::{CanFrame, EmbeddedFrame, Frame, tokio::CanSocket};
 use tokio::time::Duration;
 
-use crate::error::RnetSockErr;
+use crate::{command::get_extended_id, error::RnetSockErr};
 
 const DEFAULT_CAN_IFACE: &'static str = "can0";
 
@@ -11,20 +11,25 @@ pub const WAIT_MATCH_ID_EXACT: u32 = 0xFFFF_FFFF;
 
 pub struct RnetSock {
     inner: CanSocket,
+    jsm_id: u8,
 }
 
 impl RnetSock {
-    pub fn new(iface_name: &str) -> Result<Self, RnetSockErr> {
+    pub fn new(iface_name: &str, jsm_id: u8) -> Result<Self, RnetSockErr> {
         Ok(RnetSock {
             inner: CanSocket::open(iface_name).map_err(|_| RnetSockErr::Create)?,
+            jsm_id,
         })
     }
 
-    pub fn on_can0() -> Result<Self, RnetSockErr> {
-        RnetSock::new(DEFAULT_CAN_IFACE)
+    pub fn on_can0(jsm_id: u8) -> Result<Self, RnetSockErr> {
+        RnetSock::new(DEFAULT_CAN_IFACE, jsm_id)
     }
 
     pub async fn send<F: Into<CanFrame>>(&mut self, frame: F) -> Result<(), RnetSockErr> {
+        let mut frame = frame.into();
+        let id = frame.id_word();
+        frame.set_id(get_extended_id(id, self.jsm_id).unwrap());
         Ok(self.inner.send(frame.into()).await?)
     }
 
@@ -64,22 +69,27 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        command::{RnetCommand, rnet_id}, socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
+        command::{RnetCommand, rnet_id},
+        socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
     };
 
     #[tokio::test]
     async fn test_wait_for_can() {
         // run `cansend vcan0 02000100#0064` in terminal
-        let rsock = RnetSock::new("vcan0").unwrap();
+        let rsock = RnetSock::new("vcan0", 1).unwrap();
         let res = rsock
-            .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_secs(10)))
+            .wait_for(
+                rnet_id::JOYSTICK,
+                WAIT_ACCEPT_ANY_DEVICE,
+                Some(Duration::from_secs(10)),
+            )
             .await;
         println!("{:?}", res.unwrap());
     }
 
     #[tokio::test]
     async fn test_send_can() {
-        let mut rsock = RnetSock::new("vcan0").unwrap();
+        let mut rsock = RnetSock::new("vcan0", 1).unwrap();
         let cmd = RnetCommand::Joystick { x: 80, y: -20 };
         assert!(rsock.send(cmd).await.is_ok());
     }
@@ -87,10 +97,14 @@ mod tests {
     #[tokio::test]
     async fn test_recv_then_send() {
         // run `cansend vcan0 02000100#0064` in terminal
-        let mut rsock = RnetSock::new("vcan0").unwrap();
+        let mut rsock = RnetSock::new("vcan0", 1).unwrap();
 
         let directions = rsock
-            .wait_for(rnet_id::JOYSTICK, WAIT_ACCEPT_ANY_DEVICE, Some(Duration::from_secs(10)))
+            .wait_for(
+                rnet_id::JOYSTICK,
+                WAIT_ACCEPT_ANY_DEVICE,
+                Some(Duration::from_secs(10)),
+            )
             .await
             .expect("recved from CAN");
 

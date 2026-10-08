@@ -3,12 +3,12 @@ use socketcan::{CanDataFrame, CanFrame, EmbeddedFrame, ExtendedId};
 pub(crate) const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be configurable)
 const DEFAULT_PM_SLOT: u8 = 0; // consistantly 0
 
-pub(crate) mod rnet_id {
+pub mod rnet_id {
     // https://github.com/redragonx/open-rnet/blob/main/docs/RNET_PROTOCOL_GUIDE.md
-    pub(crate) const JOYSTICK: u32 = 0x02000000;
-    pub(crate) const SPEED: u32 = 0x0A040000;
-    pub(crate) const HORN_START: u32 = 0x0C040000;
-    pub(crate) const HORN_END: u32 = 0x0C040001;
+    pub const JOYSTICK: u32 = 0x02000000;
+    pub const SPEED: u32 = 0x0A040000;
+    pub const HORN_START: u32 = 0x0C040000;
+    pub const HORN_END: u32 = 0x0C040001;
 }
 
 // converts a raw rnet command id to an extendedid
@@ -58,7 +58,7 @@ impl From<RnetCommand> for CanFrame {
                 CanFrame::Data(
                     CanDataFrame::new(id, &[]).expect("HornEnd's CanDataFrame should be valid"),
                 )
-            },
+            }
         }
     }
 }
