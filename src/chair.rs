@@ -16,7 +16,7 @@ impl Chair {
         Chair { sock: socket }
     }
 
-    async fn move_toward(&mut self, dir: (i8, i8), millis: u64) -> Result<(), ChairError> {
+    pub async fn move_in_direction(&mut self, dir: (i8, i8), millis: u64) -> Result<(), ChairError> {
         let limit = Instant::now() + Duration::from_millis(millis);
 
         self.sock.drain().await?;
@@ -51,7 +51,19 @@ impl Chair {
     }
 
     pub async fn forward(&mut self, millis: u64) -> Result<(), ChairError> {
-        self.move_toward((0, 100), millis).await
+        self.move_in_direction((0, 100), millis).await
+    }
+
+    pub async fn backward(&mut self, millis: u64) -> Result<(), ChairError> {
+        self.move_in_direction((0, -100), millis).await
+    }
+
+    pub async fn left(&mut self, millis: u64) -> Result<(), ChairError> {
+        self.move_in_direction((-100, 0), millis).await
+    }
+
+    pub async fn right(&mut self, millis: u64) -> Result<(), ChairError> {
+        self.move_in_direction((100, 0), millis).await
     }
 
     pub async fn set_speed(&mut self, speed: u8) -> Result<(), ChairError> {

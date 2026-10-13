@@ -1,6 +1,8 @@
+use std::time::UNIX_EPOCH;
+
 use futures_util::sink::SinkExt;
 use socketcan::{CanFrame, EmbeddedFrame, Frame, tokio::CanSocket};
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant};
 
 use crate::{command::get_extended_id, error::RnetSockErr};
 
@@ -17,8 +19,9 @@ pub struct RnetSock {
 
 impl RnetSock {
     pub fn new(iface_name: &str, jsm_id: u8) -> Result<Self, RnetSockErr> {
+        let sock = CanSocket::open(iface_name).map_err(|_| RnetSockErr::Create)?;        
         Ok(RnetSock {
-            inner: CanSocket::open(iface_name).map_err(|_| RnetSockErr::Create)?,
+            inner: sock,
             jsm_id,
         })
     }
@@ -40,6 +43,7 @@ impl RnetSock {
         mask: u32,
         timeout: Option<Duration>,
     ) -> Result<[u8; 8], RnetSockErr> {
+        // TODO(Gab): use a while loop instead of tokio's timeout
         let fut = async {
             loop {
                 let frame = self.inner.read_frame().await?;
@@ -64,14 +68,20 @@ impl RnetSock {
         }
     }
 
+    // Flush all frames from the send buffer
     pub async fn flush(&mut self) -> Result<(), RnetSockErr> {
         self.inner.flush().await?;
         Ok(())
     }
 
+    // Clear all frames from the recv buffer
     pub async fn drain(&self) -> Result<(), RnetSockErr> {
-        while let Ok(_) = self.wait_for(0, WAIT_MATCH_ANY, Some(Duration::from_millis(0))).await {
-            // discard — we only want frames from now on
+        let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        loop {
+            let (_, timestamp) = self.inner.read_frame_with_hw_timestamp().await?;
+            if timestamp > now {
+                break;
+            }
         }
         Ok(())
     }
