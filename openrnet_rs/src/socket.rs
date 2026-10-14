@@ -102,6 +102,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_wait_for_can() {
         /*
             Ensure the virtual can iface is set up:
@@ -136,6 +137,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_send_can() {
         /*
             Ensure the virtual can iface is set up:
@@ -162,6 +164,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_recv_then_send() {
         /*
             Ensure the virtual can iface is set up:

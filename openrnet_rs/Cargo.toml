@@ -8,3 +8,4 @@ tokio = { version = "1.53.2", features = ["time", "rt-multi-thread", "macros"] }
 socketcan = { version = "4.0.0", features = ["tokio"]}
 futures-util = "0.3.34"
 thiserror = "2.0.21"
+serial_test = "4.0.1"
