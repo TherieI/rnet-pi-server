@@ -16,7 +16,11 @@ impl Chair {
         Chair { sock: socket }
     }
 
-    pub async fn move_in_direction(&mut self, dir: (i8, i8), millis: u64) -> Result<(), ChairError> {
+    pub async fn move_in_direction(
+        &mut self,
+        dir: (i8, i8),
+        millis: u64,
+    ) -> Result<(), ChairError> {
         let limit = Instant::now() + Duration::from_millis(millis);
 
         self.sock.drain().await?;
