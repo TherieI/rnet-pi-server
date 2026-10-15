@@ -10,3 +10,5 @@ members = [
 
 [dependencies]
 openrnet = { path = "openrnet_rs" }
+tokio = { version = "1.53.2", features = ["time", "rt-multi-thread", "macros"] }
+thiserror = "2.0.21"
