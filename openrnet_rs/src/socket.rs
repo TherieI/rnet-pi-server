@@ -20,7 +20,7 @@ pub struct RnetSock {
 
 impl RnetSock {
     pub fn new(iface_name: &str, jsm_id: u8) -> Result<Self, RnetSockErr> {
-        let sock = CanSocket::open(iface_name).map_err(|_| RnetSockErr::Create)?;
+        let sock = CanSocket::open(iface_name).map_err(RnetSockErr::Create)?;
         Ok(RnetSock {
             inner: sock,
             jsm_id,

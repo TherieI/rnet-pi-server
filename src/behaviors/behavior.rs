@@ -16,4 +16,8 @@ pub trait Behavior: Send {
     fn update(&mut self, input: BehaviorInput<'_>) -> MotionCommand;
 
     fn stop(&mut self);
+
+    fn next_update_deadline(&self) -> Option<tokio::time::Instant> {
+        None
+    }
 }

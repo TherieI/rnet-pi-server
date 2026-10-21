@@ -13,16 +13,21 @@ pub struct BehaviorOrchestrator {
     sensor_data: Option<Vec<u8>>,
     target_data: Option<Vec<u8>>,
     status: watch::Sender<ChairStatus>,
+    motion_commands: watch::Sender<MotionCommand>,
 }
 
 impl BehaviorOrchestrator {
-    pub fn new(status: watch::Sender<ChairStatus>) -> Self {
+    pub fn new(
+        status: watch::Sender<ChairStatus>,
+        motion_commands: watch::Sender<MotionCommand>,
+    ) -> Self {
         let mut orchestrator = Self {
             current_mode: Mode::EmergencyStop,
             behavior: None,
             sensor_data: None,
             target_data: None,
             status,
+            motion_commands,
         };
         orchestrator.set_behavior(Box::new(EmergencyStop));
         orchestrator
@@ -40,24 +45,37 @@ impl BehaviorOrchestrator {
 
     pub async fn run(mut self, mut receiver: broadcast::Receiver<BluetoothMessage>) {
         loop {
-            match receiver.recv().await {
-                Ok(BluetoothMessage::ModeChange(mode)) => self.set_mode(mode),
-                Ok(BluetoothMessage::SensorData(data)) => {
-                    self.sensor_data = Some(data);
+            let deadline = self
+                .behavior
+                .as_ref()
+                .and_then(|behavior| behavior.next_update_deadline());
+            tokio::select! {
+                message = receiver.recv() => {
+                    match message {
+                        Ok(BluetoothMessage::ModeChange(mode)) => self.set_mode(mode),
+                        Ok(BluetoothMessage::SensorData(data)) => {
+                            self.sensor_data = Some(data);
+                            if let Some(command) = self.update_behavior() {
+                                self.handle_motion_command(command);
+                            }
+                        }
+                        Ok(BluetoothMessage::TargetData(data)) => {
+                            self.target_data = Some(data);
+                            if let Some(command) = self.update_behavior() {
+                                self.handle_motion_command(command);
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            eprintln!("Behavior orchestrator skipped {skipped} Bluetooth messages");
+                        }
+                        Err(broadcast::error::RecvError::Closed) => return,
+                    }
+                }
+                _ = wait_until(deadline) => {
                     if let Some(command) = self.update_behavior() {
                         self.handle_motion_command(command);
                     }
                 }
-                Ok(BluetoothMessage::TargetData(data)) => {
-                    self.target_data = Some(data);
-                    if let Some(command) = self.update_behavior() {
-                        self.handle_motion_command(command);
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                    eprintln!("Behavior orchestrator skipped {skipped} Bluetooth messages");
-                }
-                Err(broadcast::error::RecvError::Closed) => return,
             }
         }
     }
@@ -78,6 +96,9 @@ impl BehaviorOrchestrator {
             "Motion command: linear={}, angular={}",
             command.linear_velocity, command.angular_velocity
         );
+        if self.motion_commands.send(command).is_err() {
+            eprintln!("Chair controller is unavailable; motion command was not delivered");
+        }
     }
 
     pub fn set_mode(&mut self, mode: Mode) {
@@ -112,6 +133,13 @@ impl BehaviorOrchestrator {
     }
 }
 
+async fn wait_until(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,13 +150,19 @@ mod tests {
             current_mode: Mode::EmergencyStop,
             current_behavior: "EmergencyStop",
         });
-        let mut orchestrator = BehaviorOrchestrator::new(status.clone());
+        let (motion_commands, motion_receiver) = watch::channel(MotionCommand {
+            linear_velocity: 0.0,
+            angular_velocity: 0.0,
+        });
+        let mut orchestrator = BehaviorOrchestrator::new(status.clone(), motion_commands);
 
         orchestrator.set_mode(Mode::EmergencyStop);
         assert_eq!(orchestrator.update_behavior().unwrap().linear_velocity, 0.0);
+        assert_eq!(motion_receiver.borrow().linear_velocity, 0.0);
 
         orchestrator.set_mode(Mode::DummyGo);
         assert_eq!(status.borrow().current_behavior, "DummyGo");
+        assert_eq!(motion_receiver.borrow().linear_velocity, 0.25);
         assert_eq!(
             orchestrator.update_behavior().unwrap().linear_velocity,
             0.25
@@ -145,5 +179,49 @@ mod tests {
         let command = orchestrator.update_behavior().unwrap();
         assert_eq!(command.linear_velocity, 0.0);
         assert_eq!(command.angular_velocity, 0.0);
+    }
+
+    #[tokio::test]
+    async fn dummy_go_stops_automatically_after_its_duration() {
+        let (status, _status_receiver) = watch::channel(ChairStatus {
+            current_mode: Mode::EmergencyStop,
+            current_behavior: "EmergencyStop",
+        });
+        let (motion_commands, mut motion_receiver) = watch::channel(MotionCommand {
+            linear_velocity: 0.0,
+            angular_velocity: 0.0,
+        });
+        let (messages, receiver) = broadcast::channel(4);
+        let orchestrator = BehaviorOrchestrator::new(status, motion_commands);
+        let task = tokio::spawn(orchestrator.run(receiver));
+
+        messages
+            .send(BluetoothMessage::ModeChange(Mode::DummyGo))
+            .unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if motion_receiver.borrow_and_update().linear_velocity == 0.25 {
+                    break;
+                }
+                motion_receiver.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("DummyGo did not start moving");
+
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                if motion_receiver.borrow_and_update().linear_velocity == 0.0 {
+                    break;
+                }
+                motion_receiver.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("DummyGo did not stop automatically");
+
+        drop(messages);
+        task.await.unwrap();
     }
 }

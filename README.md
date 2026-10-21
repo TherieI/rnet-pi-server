@@ -24,6 +24,32 @@ sudo ip link set can0 up type can bitrate 125000
 ip link show can0
 ```
 
+# Running
+
+Install Rust and Cargo, then run from the repository root:
+
+```sh
+cargo run
+```
+
+By default, the program connects to the R-Net chair over `can0`, starts a
+Bluetooth LE GATT server, and advertises as `SmartWheelchair`. On a Linux
+device, make sure Bluetooth is enabled and the CAN interface is configured
+before starting.
+
+To run without a connected chair or `can0`, use the mock chair:
+
+```sh
+RNET_MOCK_CHAIR=1 cargo run
+```
+
+The mock still starts the Bluetooth LE server. Connect to `SmartWheelchair`
+with a BLE client and write `DUMB`, `STOP`, `GUIDE`, or `DOCK` to its command
+characteristic. `DUMB` moves forward for two seconds, then stops automatically;
+`STOP` stops immediately. `GUIDE` and `DOCK` currently use the safe stop
+behavior because those modes are not implemented yet. Read the status
+characteristic for the current mode and behavior.
+
 # Testing
 
 1. Install `can-utils`
