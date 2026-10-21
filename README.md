@@ -38,3 +38,32 @@ sudo modprobe vcan
 sudo ip link add dev vcan0 type vcan
 sudo ip link set up vcan0
 ```
+
+## Writing good rust function documentation:
+```rust
+/// One-sentence summary explaining what the function does (in the imperative mood).
+///
+/// A longer paragraph providing additional context, explaining how the function works, 
+/// or detailing specific edge cases and architectural considerations.
+///
+/// # Examples
+///
+/// ```
+/// use my_crate::add_together;
+///
+/// let result = add_together(2, 3);
+/// assert_eq!(result, 5);
+/// ```
+///
+/// # Errors
+///
+/// List conditions under which this function will return an `Err` variant.
+///
+/// # Panics
+///
+/// List conditions under which this function will unexpectedly panic.
+///
+/// # Safety
+///
+/// (Only if the function is `unsafe`). Explain what invariants the caller must uphold.
+```

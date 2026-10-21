@@ -1,3 +1,5 @@
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+
 use openrnet::{
     command::{RnetCommand, rnet_id},
     error::RnetSockErr,
@@ -9,11 +11,12 @@ use crate::error::ChairError;
 
 pub struct Chair {
     sock: RnetSock,
+    locked: Arc<AtomicBool>
 }
 
 impl Chair {
     pub fn new(socket: RnetSock) -> Self {
-        Chair { sock: socket }
+        Chair { sock: socket, locked: Arc::new(false.into()) }
     }
 
     pub async fn move_in_direction(
@@ -23,8 +26,8 @@ impl Chair {
     ) -> Result<(), ChairError> {
         let limit = Instant::now() + Duration::from_millis(millis);
 
-        self.sock.drain().await?;
-        while Instant::now() < limit {
+        self.sock.clear_recv_buf();
+        while !self.locked.load(Ordering::Relaxed) && Instant::now() < limit {
             // wait for the JSM's joystick input
             match self
                 .sock
@@ -51,7 +54,12 @@ impl Chair {
             }
         }
 
-        Ok(())
+        if self.locked.load(Ordering::Relaxed) {
+            // `Chair::stop` called
+            Err(ChairError::EmergencyStop)
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn forward(&mut self, millis: u64) -> Result<(), ChairError> {
@@ -79,5 +87,13 @@ impl Chair {
         tokio::time::sleep(Duration::from_millis(millis)).await;
         self.sock.send(RnetCommand::HornStop).await?;
         Ok(())
+    }
+
+    pub async fn stop(&mut self) {
+        self.locked.store(true, Ordering::Relaxed);
+    }
+
+    pub async fn unlock(&mut self) {
+        self.locked.store(false, Ordering::Relaxed);
     }
 }

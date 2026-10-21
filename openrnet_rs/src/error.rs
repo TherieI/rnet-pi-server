@@ -11,5 +11,5 @@ pub enum RnetSockErr {
     #[error("Socket operation timed out")]
     TimedOut,
     #[error("Sockcan internal error")]
-    Internal(#[from] socketcan::Error),
+    CanSocket(#[from] socketcan::Error),
 }
