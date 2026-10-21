@@ -5,6 +5,8 @@ use thiserror::Error;
 pub enum ChairError {
     #[error("User interrupted the chair operation")]
     UserInterrupt,
-    #[error("RNET socket Failure")]
+    #[error("RNET socket failure")]
     Socket(#[from] RnetSockErr),
+    #[error("Chair operation was interrupted by an emergency stop")]
+    EmergencyStop
 }

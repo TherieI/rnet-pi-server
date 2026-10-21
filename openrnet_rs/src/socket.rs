@@ -19,25 +19,108 @@ pub struct RnetSock {
 }
 
 impl RnetSock {
-    pub fn new(iface_name: &str, jsm_id: u8) -> Result<Self, RnetSockErr> {
-        let sock = CanSocket::open(iface_name).map_err(|_| RnetSockErr::Create)?;
+    /// Opens a new R-NET Socket on the specified device.
+    ///
+    /// The JSM (JoyStick Manager) id should map to the JSM device publishing CAN frames to the chair. Typically the JSM id is 1.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use openrnet_rs::RnetSock;
+    ///
+    /// let rsock = RnetSock::new("vcan0", 1).expect("vcan0 is a valid interface!");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an ['RnetSockErr::Create`] if the can device was not found or does not exist on the host machine.
+    pub fn new(device: &str, jsm_id: u8) -> Result<Self, RnetSockErr> {
+        let sock = CanSocket::open(device).map_err(|_| RnetSockErr::Create)?;
         Ok(RnetSock {
             inner: sock,
             jsm_id,
         })
     }
 
+    /// Opens a new R-NET Socket on can0.
+    ///
+    /// The JSM (JoyStick Manager) id should map to the JSM device publishing CAN frames to the chair. Typically the JSM id is 1.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use openrnet_rs::RnetSock;
+    ///
+    /// let rsock = RnetSock::on_can0(1).expect("can0 is a valid interface!");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an ['RnetSockErr::Create`] if the can device was not found or does not exist on the host machine.
     pub fn on_can0(jsm_id: u8) -> Result<Self, RnetSockErr> {
         RnetSock::new(DEFAULT_CAN_IFACE, jsm_id)
     }
 
-    pub async fn send<F: Into<CanFrame>>(&mut self, frame: F) -> Result<(), RnetSockErr> {
-        let mut frame = frame.into();
+    /// Asynchronously sends a command to the wheelchair.
+    ///
+    /// 99% of the time [`RnetCommand`] should be passed to the function, but it will also accept raw `CanFrame`s.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use openrnet_rs::{RnetSock, RnetCommand};
+    ///
+    /// let rsock = RnetSock::on_can0(1).expect("can0 is a valid interface!");
+    /// let _ = rsock.send(RnetCommand::SetSpeed(50)).await?;
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`RnetSockErr::Read`] for io errors.
+    /// Returns an [`RnetSockErr::CanSocket`] for internal CanSocket errors.
+    pub async fn send<F: Into<CanFrame>>(&mut self, command: F) -> Result<(), RnetSockErr> {
+        let mut frame = command.into();
         let id = frame.id_word() & !(1 << 31);
         frame.set_id(get_extended_id(id, self.jsm_id).unwrap());
         Ok(self.inner.send(frame.into()).await?)
     }
 
+    /// Asynchronously waits for a CAN Frame with specified id.
+    ///
+    /// The mask can be used to define bits of the frame that need to match the id and bits that don't. 
+    /// For the most part, using `WAIT_MATCH_ID_EXACT`, `WAIT_ACCEPT_ANY_DEVICE`, or `WAIT_MATCH_ANY` will be
+    /// sufficient for mask.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use openrnet_rs::{RnetSock, RnetCommand};
+    ///
+    /// let rsock = RnetSock::on_can0(1).expect("can0 is a valid interface!");
+    /// match rsock
+    ///     .wait_for(
+    ///         rnet_id::JOYSTICK,
+    ///         WAIT_ACCEPT_ANY_DEVICE,
+    ///         Some(Duration::from_millis(10)),
+    ///     )
+    ///     .await
+    /// {
+    ///     Ok(_) => {
+    ///         // spoof the joystick's CAN frame
+    ///         rsock
+    ///             .send(RnetCommand::Joystick { x: 30, y: 70 })
+    ///             .await?;
+    ///     }
+    ///     Err(RnetSockErr::TimedOut) => { /* No CAN frame with id matching rnet_id::JOYSTICK was found */ }
+    ///     Err(e) => { /* Handle the error... */ },
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`RnetSockErr::Read`] for io errors.
+    /// Returns an [`RnetSockErr::CanSocket`] for internal CanSocket errors.
+    /// Returns an [`RnetSockErr::TimedOut`] if no frame was found during the given timeout.
     pub async fn wait_for(
         &self,
         id: u32,
@@ -64,24 +147,20 @@ impl RnetSock {
         Err(RnetSockErr::TimedOut)
     }
 
-    // Flush all frames from the send buffer
-    pub async fn flush(&mut self) -> Result<(), RnetSockErr> {
-        self.inner.flush().await?;
-        Ok(())
-    }
-
-    // Clear all frames from the recv buffer
-    pub async fn drain(&self) -> Result<(), RnetSockErr> {
-        let now = std::time::SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap();
-        loop {
-            let (_, timestamp) = self.inner.read_frame_with_hw_timestamp().await?;
-            if timestamp > now {
-                break;
-            }
-        }
-        Ok(())
+    /// Clears all frames from the receive buffer.
+    ///
+    /// Before waiting on frames, it is advised to clear the frame buffer so only recent frames are processed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use openrnet_rs::RnetSock;
+    ///
+    /// let rsock = RnetSock::on_can0(1).expect("can0 is a valid interface!");
+    /// rsock.clear_recv_buf();
+    /// ```
+    pub fn clear_recv_buf(&self) {
+        while let Ok(_) =  self.inner.try_read_frame() { }
     }
 }
 
