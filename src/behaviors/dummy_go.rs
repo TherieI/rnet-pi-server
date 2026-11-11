@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use super::behavior::{Behavior, BehaviorInput, MotionCommand};
+use super::behavior::{Behavior, BehaviorInput, JoystickCommand};
 
-const FORWARD_VELOCITY: f32 = 0.25;
+const FORWARD_JOYSTICK_Y: i8 = 25;
 const FORWARD_DURATION: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Default)]
@@ -17,7 +17,7 @@ impl Behavior for DummyGo {
         self.finished = false;
     }
 
-    fn update(&mut self, _input: BehaviorInput<'_>) -> MotionCommand {
+    fn update(&mut self, _input: BehaviorInput<'_>) -> JoystickCommand {
         let is_running = self
             .started_at
             .is_some_and(|started_at| started_at.elapsed() < FORWARD_DURATION);
@@ -25,9 +25,9 @@ impl Behavior for DummyGo {
             self.finished = true;
         }
 
-        MotionCommand {
-            linear_velocity: if is_running { FORWARD_VELOCITY } else { 0.0 },
-            angular_velocity: 0.0,
+        JoystickCommand {
+            x: 0,
+            y: if is_running { FORWARD_JOYSTICK_Y } else { 0 },
         }
     }
 
@@ -60,13 +60,13 @@ mod tests {
 
         behavior.start();
         let command = behavior.update(input);
-        assert_eq!(command.linear_velocity, FORWARD_VELOCITY);
-        assert_eq!(command.angular_velocity, 0.0);
+        assert_eq!(command.x, 0);
+        assert_eq!(command.y, FORWARD_JOYSTICK_Y);
 
         behavior.started_at = Some(tokio::time::Instant::now() - FORWARD_DURATION);
         let command = behavior.update(input);
-        assert_eq!(command.linear_velocity, 0.0);
-        assert_eq!(command.angular_velocity, 0.0);
+        assert_eq!(command.x, 0);
+        assert_eq!(command.y, 0);
     }
 
     #[test]
@@ -81,7 +81,7 @@ mod tests {
         behavior.stop();
 
         let command = behavior.update(input);
-        assert_eq!(command.linear_velocity, 0.0);
-        assert_eq!(command.angular_velocity, 0.0);
+        assert_eq!(command.x, 0);
+        assert_eq!(command.y, 0);
     }
 }

@@ -1,7 +1,7 @@
-#[derive(Debug, Clone)]
-pub struct MotionCommand {
-    pub linear_velocity: f32,
-    pub angular_velocity: f32,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JoystickCommand {
+    pub x: i8,
+    pub y: i8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -13,7 +13,7 @@ pub struct BehaviorInput<'a> {
 pub trait Behavior: Send {
     fn start(&mut self);
 
-    fn update(&mut self, input: BehaviorInput<'_>) -> MotionCommand;
+    fn update(&mut self, input: BehaviorInput<'_>) -> JoystickCommand;
 
     fn stop(&mut self);
 

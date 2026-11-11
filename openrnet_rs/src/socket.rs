@@ -1,5 +1,3 @@
-use std::time::UNIX_EPOCH;
-
 use futures_util::sink::SinkExt;
 use socketcan::{CanFrame, EmbeddedFrame, Frame, tokio::CanSocket};
 use tokio::time::{Duration, Instant};
@@ -46,8 +44,11 @@ impl RnetSock {
     ) -> Result<[u8; 8], RnetSockErr> {
         let time_limit = Instant::now() + timeout.unwrap_or(RNET_WAIT_MAX_TIMEOUT);
 
-        while Instant::now() < time_limit {
-            let frame = self.inner.read_frame().await?;
+        loop {
+            let frame = match tokio::time::timeout_at(time_limit, self.inner.read_frame()).await {
+                Ok(frame) => frame?,
+                Err(_) => return Err(RnetSockErr::TimedOut),
+            };
             if let CanFrame::Data(f) = frame {
                 // Extended frames have the 31st bit set to 1. Clearing this bit marks an extended frame id
                 // indistinguishable from a standard frame id which might cause issues in the future.
@@ -60,8 +61,6 @@ impl RnetSock {
                 }
             }
         }
-
-        Err(RnetSockErr::TimedOut)
     }
 
     // Flush all frames from the send buffer
@@ -72,16 +71,13 @@ impl RnetSock {
 
     // Clear all frames from the recv buffer
     pub async fn drain(&self) -> Result<(), RnetSockErr> {
-        let now = std::time::SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap();
         loop {
-            let (_, timestamp) = self.inner.read_frame_with_hw_timestamp().await?;
-            if timestamp > now {
-                break;
+            match self.inner.try_read_frame() {
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(()),
+                Err(error) => return Err(error.into()),
             }
         }
-        Ok(())
     }
 }
 
@@ -94,7 +90,7 @@ mod tests {
 
     use crate::{
         command::{RnetCommand, rnet_id},
-        socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE},
+        socket::{RnetSock, WAIT_ACCEPT_ANY_DEVICE, WAIT_MATCH_ID_EXACT},
     };
 
     fn can_bus_emulator() -> CanSocket {
@@ -134,6 +130,46 @@ mod tests {
         let res = tokio::join!(test, can_emulation);
         let data = res.0.unwrap();
         assert_eq!(data[1], 100);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_wait_for_times_out_when_no_frame_matches() {
+        /*
+            Ensure the virtual can iface is set up:
+            sudo modprobe vcan
+            sudo ip link add dev vcan0 type vcan
+            sudo ip link set up vcan0
+        */
+        let rsock = RnetSock::new("vcan0", 1).unwrap();
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            rsock.wait_for(
+                u32::MAX,
+                WAIT_MATCH_ID_EXACT,
+                Some(Duration::from_millis(10)),
+            ),
+        )
+        .await
+        .expect("wait_for did not honor its timeout");
+
+        assert!(matches!(result, Err(crate::error::RnetSockErr::TimedOut)));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_drain_returns_when_receive_queue_is_empty() {
+        /*
+            Ensure the virtual can iface is set up:
+            sudo modprobe vcan
+            sudo ip link add dev vcan0 type vcan
+            sudo ip link set up vcan0
+        */
+        let rsock = RnetSock::new("vcan0", 1).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), rsock.drain())
+            .await
+            .expect("drain waited for a future CAN frame")
+            .unwrap();
     }
 
     #[tokio::test]

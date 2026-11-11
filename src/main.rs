@@ -6,7 +6,7 @@ mod orchestrator;
 
 use tokio::sync::{broadcast, watch};
 
-use behaviors::behavior::MotionCommand;
+use behaviors::behavior::JoystickCommand;
 use chair::{chair_controller::ChairController, error::ChairError};
 use messages::messages::{BluetoothMessage, ChairStatus, Mode};
 
@@ -24,13 +24,10 @@ async fn main() -> Result<(), ChairError> {
         current_mode: Mode::EmergencyStop,
         current_behavior: "EmergencyStop",
     });
-    let (motion_tx, motion_rx) = watch::channel(MotionCommand {
-        linear_velocity: 0.0,
-        angular_velocity: 0.0,
-    });
+    let (joystick_tx, joystick_rx) = watch::channel(JoystickCommand { x: 0, y: 0 });
 
     tokio::spawn(async move {
-        if let Err(error) = controller.run(motion_rx).await {
+        if let Err(error) = controller.run(joystick_rx).await {
             eprintln!("Chair controller failed: {error}");
         }
     });
@@ -43,7 +40,7 @@ async fn main() -> Result<(), ChairError> {
         }
     });
 
-    orchestrator::behavior_orchestrator::BehaviorOrchestrator::new(status_tx, motion_tx)
+    orchestrator::behavior_orchestrator::BehaviorOrchestrator::new(status_tx, joystick_tx)
         .run(orchestrator_rx)
         .await;
     Ok(())

@@ -1,7 +1,7 @@
 use tokio::sync::{broadcast, watch};
 
 use crate::behaviors::{
-    behavior::{Behavior, BehaviorInput, MotionCommand},
+    behavior::{Behavior, BehaviorInput, JoystickCommand},
     dummy_go::DummyGo,
     emergency_stop::EmergencyStop,
 };
@@ -13,13 +13,13 @@ pub struct BehaviorOrchestrator {
     sensor_data: Option<Vec<u8>>,
     target_data: Option<Vec<u8>>,
     status: watch::Sender<ChairStatus>,
-    motion_commands: watch::Sender<MotionCommand>,
+    joystick_commands: watch::Sender<JoystickCommand>,
 }
 
 impl BehaviorOrchestrator {
     pub fn new(
         status: watch::Sender<ChairStatus>,
-        motion_commands: watch::Sender<MotionCommand>,
+        joystick_commands: watch::Sender<JoystickCommand>,
     ) -> Self {
         let mut orchestrator = Self {
             current_mode: Mode::EmergencyStop,
@@ -27,7 +27,7 @@ impl BehaviorOrchestrator {
             sensor_data: None,
             target_data: None,
             status,
-            motion_commands,
+            joystick_commands,
         };
         orchestrator.set_behavior(Box::new(EmergencyStop));
         orchestrator
@@ -56,13 +56,13 @@ impl BehaviorOrchestrator {
                         Ok(BluetoothMessage::SensorData(data)) => {
                             self.sensor_data = Some(data);
                             if let Some(command) = self.update_behavior() {
-                                self.handle_motion_command(command);
+                                self.handle_joystick_command(command);
                             }
                         }
                         Ok(BluetoothMessage::TargetData(data)) => {
                             self.target_data = Some(data);
                             if let Some(command) = self.update_behavior() {
-                                self.handle_motion_command(command);
+                                self.handle_joystick_command(command);
                             }
                         }
                         Err(broadcast::error::RecvError::Lagged(skipped)) => {
@@ -73,14 +73,14 @@ impl BehaviorOrchestrator {
                 }
                 _ = wait_until(deadline) => {
                     if let Some(command) = self.update_behavior() {
-                        self.handle_motion_command(command);
+                        self.handle_joystick_command(command);
                     }
                 }
             }
         }
     }
 
-    fn update_behavior(&mut self) -> Option<MotionCommand> {
+    fn update_behavior(&mut self) -> Option<JoystickCommand> {
         let input = BehaviorInput {
             sensor_data: self.sensor_data.as_deref(),
             target_data: self.target_data.as_deref(),
@@ -91,13 +91,10 @@ impl BehaviorOrchestrator {
             .map(|behavior| behavior.update(input))
     }
 
-    fn handle_motion_command(&self, command: MotionCommand) {
-        println!(
-            "Motion command: linear={}, angular={}",
-            command.linear_velocity, command.angular_velocity
-        );
-        if self.motion_commands.send(command).is_err() {
-            eprintln!("Chair controller is unavailable; motion command was not delivered");
+    fn handle_joystick_command(&self, command: JoystickCommand) {
+        println!("Joystick command: x={}, y={}", command.x, command.y);
+        if self.joystick_commands.send(command).is_err() {
+            eprintln!("Chair controller is unavailable; joystick command was not delivered");
         }
     }
 
@@ -128,7 +125,7 @@ impl BehaviorOrchestrator {
         println!("Mode updated to {:?}", self.current_mode);
 
         if let Some(command) = self.update_behavior() {
-            self.handle_motion_command(command);
+            self.handle_joystick_command(command);
         }
     }
 }
@@ -150,35 +147,29 @@ mod tests {
             current_mode: Mode::EmergencyStop,
             current_behavior: "EmergencyStop",
         });
-        let (motion_commands, motion_receiver) = watch::channel(MotionCommand {
-            linear_velocity: 0.0,
-            angular_velocity: 0.0,
-        });
-        let mut orchestrator = BehaviorOrchestrator::new(status.clone(), motion_commands);
+        let (joystick_commands, joystick_receiver) = watch::channel(JoystickCommand { x: 0, y: 0 });
+        let mut orchestrator = BehaviorOrchestrator::new(status.clone(), joystick_commands);
 
         orchestrator.set_mode(Mode::EmergencyStop);
-        assert_eq!(orchestrator.update_behavior().unwrap().linear_velocity, 0.0);
-        assert_eq!(motion_receiver.borrow().linear_velocity, 0.0);
+        assert_eq!(orchestrator.update_behavior().unwrap().y, 0);
+        assert_eq!(joystick_receiver.borrow().y, 0);
 
         orchestrator.set_mode(Mode::DummyGo);
         assert_eq!(status.borrow().current_behavior, "DummyGo");
-        assert_eq!(motion_receiver.borrow().linear_velocity, 0.25);
-        assert_eq!(
-            orchestrator.update_behavior().unwrap().linear_velocity,
-            0.25
-        );
+        assert_eq!(joystick_receiver.borrow().y, 25);
+        assert_eq!(orchestrator.update_behavior().unwrap().y, 25);
 
         orchestrator.set_mode(Mode::GuideFollowing);
         assert_eq!(status.borrow().current_mode, Mode::GuideFollowing);
         assert_eq!(status.borrow().current_behavior, "EmergencyStop");
         let command = orchestrator.update_behavior().unwrap();
-        assert_eq!(command.linear_velocity, 0.0);
-        assert_eq!(command.angular_velocity, 0.0);
+        assert_eq!(command.x, 0);
+        assert_eq!(command.y, 0);
 
         orchestrator.set_mode(Mode::AutoDock);
         let command = orchestrator.update_behavior().unwrap();
-        assert_eq!(command.linear_velocity, 0.0);
-        assert_eq!(command.angular_velocity, 0.0);
+        assert_eq!(command.x, 0);
+        assert_eq!(command.y, 0);
     }
 
     #[tokio::test]
@@ -187,12 +178,10 @@ mod tests {
             current_mode: Mode::EmergencyStop,
             current_behavior: "EmergencyStop",
         });
-        let (motion_commands, mut motion_receiver) = watch::channel(MotionCommand {
-            linear_velocity: 0.0,
-            angular_velocity: 0.0,
-        });
+        let (joystick_commands, mut joystick_receiver) =
+            watch::channel(JoystickCommand { x: 0, y: 0 });
         let (messages, receiver) = broadcast::channel(4);
-        let orchestrator = BehaviorOrchestrator::new(status, motion_commands);
+        let orchestrator = BehaviorOrchestrator::new(status, joystick_commands);
         let task = tokio::spawn(orchestrator.run(receiver));
 
         messages
@@ -201,10 +190,10 @@ mod tests {
 
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             loop {
-                if motion_receiver.borrow_and_update().linear_velocity == 0.25 {
+                if joystick_receiver.borrow_and_update().y == 25 {
                     break;
                 }
-                motion_receiver.changed().await.unwrap();
+                joystick_receiver.changed().await.unwrap();
             }
         })
         .await
@@ -212,10 +201,10 @@ mod tests {
 
         tokio::time::timeout(std::time::Duration::from_secs(3), async {
             loop {
-                if motion_receiver.borrow_and_update().linear_velocity == 0.0 {
+                if joystick_receiver.borrow_and_update().y == 0 {
                     break;
                 }
-                motion_receiver.changed().await.unwrap();
+                joystick_receiver.changed().await.unwrap();
             }
         })
         .await

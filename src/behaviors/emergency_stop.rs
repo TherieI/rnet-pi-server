@@ -1,4 +1,4 @@
-use super::behavior::{Behavior, BehaviorInput, MotionCommand};
+use super::behavior::{Behavior, BehaviorInput, JoystickCommand};
 
 #[derive(Debug, Default)]
 pub struct EmergencyStop;
@@ -6,11 +6,8 @@ pub struct EmergencyStop;
 impl Behavior for EmergencyStop {
     fn start(&mut self) {}
 
-    fn update(&mut self, _input: BehaviorInput<'_>) -> MotionCommand {
-        MotionCommand {
-            linear_velocity: 0.0,
-            angular_velocity: 0.0,
-        }
+    fn update(&mut self, _input: BehaviorInput<'_>) -> JoystickCommand {
+        JoystickCommand { x: 0, y: 0 }
     }
 
     fn stop(&mut self) {}
@@ -21,14 +18,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn commands_zero_linear_and_angular_velocity() {
+    fn commands_neutral_joystick_axes() {
         let mut behavior = EmergencyStop;
         let command = behavior.update(BehaviorInput {
             sensor_data: None,
             target_data: None,
         });
 
-        assert_eq!(command.linear_velocity, 0.0);
-        assert_eq!(command.angular_velocity, 0.0);
+        assert_eq!(command.x, 0);
+        assert_eq!(command.y, 0);
     }
 }
