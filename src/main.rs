@@ -26,22 +26,49 @@ async fn main() -> Result<(), ChairError> {
     });
     let (joystick_tx, joystick_rx) = watch::channel(JoystickCommand { x: 0, y: 0 });
 
-    tokio::spawn(async move {
-        if let Err(error) = controller.run(joystick_rx).await {
-            eprintln!("Chair controller failed: {error}");
-        }
-    });
+    let chair_task = tokio::spawn(async move { controller.run(joystick_rx).await });
 
     let ble_tx = tx.clone();
 
-    tokio::spawn(async move {
-        if let Err(error) = bluetooth::ble_server::setup_ble_server(ble_tx, status_rx).await {
-            eprintln!("BLE server failed: {error}");
-        }
-    });
+    let ble_task =
+        tokio::spawn(
+            async move { bluetooth::ble_server::setup_ble_server(ble_tx, status_rx).await },
+        );
 
-    orchestrator::behavior_orchestrator::BehaviorOrchestrator::new(status_tx, joystick_tx)
-        .run(orchestrator_rx)
-        .await;
+    let orchestrator_task = orchestrator::behavior_orchestrator::BehaviorOrchestrator::new(
+        status_tx,
+        joystick_tx.clone(),
+    )
+    .run(orchestrator_rx);
+
+    tokio::pin!(chair_task);
+    tokio::pin!(ble_task);
+    tokio::pin!(orchestrator_task);
+
+    tokio::select! {
+        result = &mut chair_task => {
+            joystick_tx.send(JoystickCommand { x: 0, y: 0 }).ok();
+            match result {
+                Ok(Ok(())) => eprintln!("Chair controller stopped"),
+                Ok(Err(error)) => eprintln!("Chair controller failed: {error}"),
+                Err(error) => eprintln!("Chair controller task panicked: {error}"),
+            }
+        }
+        result = &mut ble_task => {
+            joystick_tx.send(JoystickCommand { x: 0, y: 0 }).ok();
+            match result {
+                Ok(Ok(())) => eprintln!("BLE server stopped"),
+                Ok(Err(error)) => eprintln!("BLE server failed: {error}"),
+                Err(error) => eprintln!("BLE server task panicked: {error}"),
+            }
+        }
+        () = &mut orchestrator_task => {
+            joystick_tx.send(JoystickCommand { x: 0, y: 0 }).ok();
+            eprintln!("Behavior orchestrator stopped");
+        }
+    }
+
+    chair_task.abort();
+    ble_task.abort();
     Ok(())
 }

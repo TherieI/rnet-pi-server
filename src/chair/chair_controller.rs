@@ -51,7 +51,7 @@ impl ChairController {
         mut self,
         mut commands: watch::Receiver<JoystickCommand>,
     ) -> Result<(), ChairError> {
-        let mut command = commands.borrow_and_update().clone();
+        let mut command = *commands.borrow_and_update();
         let mut interval = tokio::time::interval(COMMAND_INTERVAL);
 
         loop {
@@ -60,7 +60,7 @@ impl ChairController {
                     if changed.is_err() {
                         return Ok(());
                     }
-                    command = commands.borrow_and_update().clone();
+                    command = *commands.borrow_and_update();
                 }
                 _ = interval.tick() => {
                     let direction = (command.x, command.y);

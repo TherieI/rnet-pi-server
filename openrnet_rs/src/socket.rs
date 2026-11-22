@@ -4,7 +4,7 @@ use tokio::time::{Duration, Instant};
 
 use crate::{command::get_extended_id, error::RnetSockErr};
 
-const DEFAULT_CAN_IFACE: &'static str = "can0";
+const DEFAULT_CAN_IFACE: &str = "can0";
 const RNET_WAIT_MAX_TIMEOUT: Duration = Duration::from_secs(100);
 
 pub const WAIT_ACCEPT_ANY_DEVICE: u32 = 0xFFFF_F0FF;
@@ -33,7 +33,7 @@ impl RnetSock {
         let mut frame = frame.into();
         let id = frame.id_word() & !(1 << 31);
         frame.set_id(get_extended_id(id, self.jsm_id).unwrap());
-        Ok(self.inner.send(frame.into()).await?)
+        Ok(self.inner.send(frame).await?)
     }
 
     pub async fn wait_for(

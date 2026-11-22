@@ -21,7 +21,7 @@ const USER_DESCRIPTION_UUID: Uuid = Uuid::from_u128(0x0000290100001000800000805f
 pub async fn setup_ble_server(
     publisher: Sender<BluetoothMessage>,
     status: watch::Receiver<ChairStatus>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let session = bluer::Session::new().await?;
     let adapter = initialize_adapter(&session).await?;
 
@@ -30,7 +30,7 @@ pub async fn setup_ble_server(
 
 async fn initialize_adapter(
     session: &bluer::Session,
-) -> Result<bluer::Adapter, Box<dyn std::error::Error>> {
+) -> Result<bluer::Adapter, Box<dyn std::error::Error + Send + Sync>> {
     let adapter = session.default_adapter().await?;
     adapter.set_powered(true).await?;
     println!("Bluetooth adapter '{}' ready", adapter.name());
@@ -42,7 +42,7 @@ async fn run_server(
     adapter: bluer::Adapter,
     publisher: Sender<BluetoothMessage>,
     status: watch::Receiver<ChairStatus>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _gatt_handle = adapter
         .serve_gatt_application(create_gatt_application(publisher, status))
         .await?;
@@ -82,9 +82,11 @@ fn create_gatt_application(
                             Box::pin(async move {
                                 println!("Raw BLE write: {:?}", value);
 
-                                if let Ok(text) = str::from_utf8(&value) {
-                                    handle_command(text.trim(), &publisher);
-                                }
+                                let text = str::from_utf8(&value).map_err(|error| {
+                                    eprintln!("Ignored invalid UTF-8 BLE command: {error}");
+                                    ReqError::InvalidValueLength
+                                })?;
+                                handle_command(text.trim(), &publisher);
 
                                 Ok(())
                             })
@@ -212,5 +214,7 @@ fn handle_command(command: &str, publisher: &Sender<BluetoothMessage>) {
         }
     };
 
-    let _ = publisher.send(BluetoothMessage::ModeChange(mode));
+    if publisher.send(BluetoothMessage::ModeChange(mode)).is_err() {
+        eprintln!("Chair mode change was not delivered because the orchestrator is unavailable");
+    }
 }

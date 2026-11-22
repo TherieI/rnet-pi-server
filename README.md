@@ -50,6 +50,33 @@ characteristic. `DUMB` moves forward for two seconds, then stops automatically;
 behavior because those modes are not implemented yet. Read the status
 characteristic for the current mode and behavior.
 
+# Running with Docker
+
+The container uses the host's BlueZ daemon through the system D-Bus socket.
+Make sure Bluetooth is enabled on the host and that the host has a `bluetooth`
+group. The example assumes a runtime that can connect to the host system bus
+and pass the host Bluetooth group ID; rootless Podman may need additional host
+configuration for this. Build and run the image on Linux:
+
+```sh
+docker build -t rnet-pi-server .
+
+BLUETOOTH_GID="$(getent group bluetooth | cut -d: -f3)"
+docker run --rm \
+  --network host \
+  --group-add "$BLUETOOTH_GID" \
+  --mount type=bind,source=/run/dbus/system_bus_socket,target=/run/dbus/system_bus_socket \
+  -e RNET_MOCK_CHAIR=1 \
+  rnet-pi-server
+``` 
+
+`--group-add` grants the container's non-root user the host Bluetooth group's
+permissions to use BlueZ. Host networking also makes the host's `can0`
+interface available to the application when using a real chair; remove
+`RNET_MOCK_CHAIR=1` in that case. No `--privileged` mode or direct HCI device
+mapping is needed. The host must be running BlueZ and its system D-Bus socket
+must be at `/run/dbus/system_bus_socket`.
+
 # Testing
 
 1. Install `can-utils`
