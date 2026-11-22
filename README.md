@@ -64,18 +64,19 @@ docker build -t rnet-pi-server .
 BLUETOOTH_GID="$(getent group bluetooth | cut -d: -f3)"
 docker run --rm \
   --network host \
+  --cap-add=NET_RAW \
   --group-add "$BLUETOOTH_GID" \
   --mount type=bind,source=/run/dbus/system_bus_socket,target=/run/dbus/system_bus_socket \
-  -e RNET_MOCK_CHAIR=1 \
   rnet-pi-server
 ``` 
 
 `--group-add` grants the container's non-root user the host Bluetooth group's
-permissions to use BlueZ. Host networking also makes the host's `can0`
-interface available to the application when using a real chair; remove
-`RNET_MOCK_CHAIR=1` in that case. No `--privileged` mode or direct HCI device
-mapping is needed. The host must be running BlueZ and its system D-Bus socket
-must be at `/run/dbus/system_bus_socket`.
+permissions to use BlueZ. `--cap-add=NET_RAW` lets the application open the raw
+SocketCAN socket needed to communicate with `can0`. Host networking makes the
+host's CAN interface available to the application when using a real chair;
+configure and bring up that interface on the host first. No `--privileged` mode
+or direct HCI device mapping is needed. The host must be running BlueZ and its
+system D-Bus socket must be at `/run/dbus/system_bus_socket`.
 
 # Testing
 

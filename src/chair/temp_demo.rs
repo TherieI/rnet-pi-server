@@ -7,7 +7,7 @@ mod error;
 
 #[tokio::main]
 async fn main() -> Result<(), ChairError> {
-    let rsock = openrnet::socket::RnetSock::on_can0(0).unwrap();
+    let rsock = openrnet::socket::RnetSock::on_can0(openrnet::command::DEFAULT_JSM_SLOT).unwrap();
     let mut chair = Chair::new(rsock);
     // chair.honk(1000).await?;
     println!("setting speed to 20");

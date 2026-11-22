@@ -86,7 +86,7 @@ mod tests {
     use std::time::Duration;
 
     use futures_util::SinkExt;
-    use socketcan::{EmbeddedFrame, tokio::CanSocket};
+    use socketcan::{EmbeddedFrame, Frame, tokio::CanSocket};
 
     use crate::{
         command::{RnetCommand, rnet_id},
@@ -195,6 +195,7 @@ mod tests {
         let res = tokio::join!(test, can_emulation);
         assert!(res.0.is_ok());
         let frame = res.1.unwrap();
+        assert_eq!(frame.id_word() & !(1 << 31), 0x0200_0100);
         let data = frame.data();
         assert_eq!(&[(80i8) as u8, (-20i8) as u8], data);
     }

@@ -1,6 +1,6 @@
 use socketcan::{CanDataFrame, CanFrame, EmbeddedFrame, ExtendedId};
 
-pub(crate) const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be configurable)
+pub const DEFAULT_JSM_SLOT: u8 = 1; // typically 1 (may need to be configurable)
 
 pub mod rnet_id {
     // https://github.com/redragonx/open-rnet/blob/main/docs/RNET_PROTOCOL_GUIDE.md

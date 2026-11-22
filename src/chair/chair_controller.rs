@@ -31,7 +31,7 @@ pub struct ChairController {
 
 impl ChairController {
     pub fn new() -> Result<Self, ChairError> {
-        let socket = openrnet::socket::RnetSock::on_can0(0)?;
+        let socket = openrnet::socket::RnetSock::on_can0(openrnet::command::DEFAULT_JSM_SLOT)?;
         Ok(Self {
             chair: ChairDevice::Real(Chair::new(socket)),
         })
